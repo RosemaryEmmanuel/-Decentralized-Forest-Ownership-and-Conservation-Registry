@@ -7,9 +7,13 @@
 (define-constant err-milestone-not-met (err u105))
 (define-constant err-already-verified (err u106))
 (define-constant err-invalid-milestone (err u107))
+(define-constant err-insufficient-credits (err u108))
+(define-constant err-credits-retired (err u109))
 
 (define-data-var token-id-nonce uint u1)
 (define-data-var total-supply uint u0)
+(define-data-var carbon-credit-nonce uint u1)
+(define-data-var total-carbon-credits uint u0)
 
 (define-map forest-plots
   uint
@@ -48,6 +52,20 @@
 
 (define-map token-balances principal uint)
 
+(define-map carbon-credits
+  uint
+  {
+    owner: principal,
+    token-id: uint,
+    milestone-id: uint,
+    credits-amount: uint,
+    generation-date: uint,
+    retired: bool
+  }
+)
+
+(define-map carbon-credit-balances principal uint)
+
 (define-read-only (get-owner (token-id uint))
   (match (map-get? forest-plots token-id)
     plot (ok (get owner plot))
@@ -70,6 +88,18 @@
   (default-to u0 (map-get? token-balances owner))
 )
 
+(define-read-only (get-carbon-credit-balance (owner principal))
+  (default-to u0 (map-get? carbon-credit-balances owner))
+)
+
+(define-read-only (get-carbon-credit (credit-id uint))
+  (map-get? carbon-credits credit-id)
+)
+
+(define-read-only (get-total-carbon-credits)
+  (ok (var-get total-carbon-credits))
+)
+
 (define-read-only (get-forest-plot (token-id uint))
   (map-get? forest-plots token-id)
 )
@@ -84,6 +114,16 @@
 
 (define-read-only (get-total-supply)
   (ok (var-get total-supply))
+)
+
+(define-private (calculate-carbon-credits (conservation-type (string-ascii 50)) (size-acres uint))
+  (if (is-eq conservation-type "Preservation")
+    (* size-acres u5)
+    (if (is-eq conservation-type "Reforestation")
+      (* size-acres u10)
+      (* size-acres u3)
+    )
+  )
 )
 
 (define-private (mint-nft (to principal) (location (string-ascii 100)) (size-acres uint) (conservation-type (string-ascii 50)))
@@ -173,7 +213,27 @@
         })
       )
       (map-set token-balances owner (+ (get-token-balance owner) reward-amount))
-      (ok reward-amount)
+      (let
+        (
+          (carbon-credits-generated (calculate-carbon-credits (get conservation-type plot) (get size-acres plot)))
+          (credit-id (var-get carbon-credit-nonce))
+        )
+        (map-set carbon-credits
+          credit-id
+          {
+            owner: owner,
+            token-id: token-id,
+            milestone-id: milestone-id,
+            credits-amount: carbon-credits-generated,
+            generation-date: stacks-block-height,
+            retired: false
+          }
+        )
+        (map-set carbon-credit-balances owner (+ (get-carbon-credit-balance owner) carbon-credits-generated))
+        (var-set carbon-credit-nonce (+ credit-id u1))
+        (var-set total-carbon-credits (+ (var-get total-carbon-credits) carbon-credits-generated))
+        (ok reward-amount)
+      )
     )
   )
 )
@@ -277,4 +337,41 @@
     total-plots: (var-get total-supply),
     active-listings: u0
   })
+)
+
+(define-public (transfer-carbon-credits (credit-id uint) (to principal))
+  (let
+    (
+      (credit (unwrap! (map-get? carbon-credits credit-id) (err err-token-not-found)))
+      (owner (get owner credit))
+      (credits-amount (get credits-amount credit))
+    )
+    (asserts! (is-eq tx-sender owner) (err err-not-token-owner))
+    (asserts! (not (get retired credit)) (err err-credits-retired))
+    (map-set carbon-credits
+      credit-id
+      (merge credit {owner: to})
+    )
+    (map-set carbon-credit-balances owner (- (get-carbon-credit-balance owner) credits-amount))
+    (map-set carbon-credit-balances to (+ (get-carbon-credit-balance to) credits-amount))
+    (ok true)
+  )
+)
+
+(define-public (retire-carbon-credits (credit-id uint))
+  (let
+    (
+      (credit (unwrap! (map-get? carbon-credits credit-id) (err err-token-not-found)))
+      (owner (get owner credit))
+      (credits-amount (get credits-amount credit))
+    )
+    (asserts! (is-eq tx-sender owner) (err err-not-token-owner))
+    (asserts! (not (get retired credit)) (err err-credits-retired))
+    (map-set carbon-credits
+      credit-id
+      (merge credit {retired: true})
+    )
+    (map-set carbon-credit-balances owner (- (get-carbon-credit-balance owner) credits-amount))
+    (ok credits-amount)
+  )
 )
