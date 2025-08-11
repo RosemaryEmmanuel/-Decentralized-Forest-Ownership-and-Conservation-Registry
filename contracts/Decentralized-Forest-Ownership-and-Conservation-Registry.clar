@@ -7,6 +7,9 @@
 (define-constant err-milestone-not-met (err u105))
 (define-constant err-already-verified (err u106))
 (define-constant err-invalid-milestone (err u107))
+(define-constant err-not-collaborator (err u108))
+(define-constant err-insufficient-shares (err u109))
+(define-constant err-already-collaborator (err u110))
 
 (define-data-var token-id-nonce uint u1)
 (define-data-var total-supply uint u0)
@@ -48,6 +51,20 @@
 
 (define-map token-balances principal uint)
 
+(define-map collaborators
+  {token-id: uint, collaborator: principal}
+  {
+    shares: uint,
+    active: bool,
+    joined-at: uint
+  }
+)
+
+(define-map collaboration-approvals
+  {token-id: uint, milestone-id: uint, collaborator: principal}
+  bool
+)
+
 (define-read-only (get-owner (token-id uint))
   (match (map-get? forest-plots token-id)
     plot (ok (get owner plot))
@@ -68,6 +85,14 @@
 
 (define-read-only (get-token-balance (owner principal))
   (default-to u0 (map-get? token-balances owner))
+)
+
+(define-read-only (get-collaborator (token-id uint) (collaborator principal))
+  (map-get? collaborators {token-id: token-id, collaborator: collaborator})
+)
+
+(define-read-only (get-collaboration-approval (token-id uint) (milestone-id uint) (collaborator principal))
+  (default-to false (map-get? collaboration-approvals {token-id: token-id, milestone-id: milestone-id, collaborator: collaborator}))
 )
 
 (define-read-only (get-forest-plot (token-id uint))
@@ -277,4 +302,100 @@
     total-plots: (var-get total-supply),
     active-listings: u0
   })
+)
+
+(define-public (invite-collaborator (token-id uint) (collaborator principal) (shares uint))
+  (let
+    (
+      (plot (unwrap! (map-get? forest-plots token-id) (err err-token-not-found)))
+    )
+    (asserts! (is-eq (get owner plot) tx-sender) (err err-not-token-owner))
+    (asserts! (> shares u0) (err err-insufficient-shares))
+    (asserts! (is-none (map-get? collaborators {token-id: token-id, collaborator: collaborator})) (err err-already-collaborator))
+    (map-set collaborators
+      {token-id: token-id, collaborator: collaborator}
+      {
+        shares: shares,
+        active: true,
+        joined-at: stacks-block-height
+      }
+    )
+    (ok true)
+  )
+)
+
+(define-public (remove-collaborator (token-id uint) (collaborator principal))
+  (let
+    (
+      (plot (unwrap! (map-get? forest-plots token-id) (err err-token-not-found)))
+      (collaboration (unwrap! (map-get? collaborators {token-id: token-id, collaborator: collaborator}) (err err-not-collaborator)))
+    )
+    (asserts! (is-eq (get owner plot) tx-sender) (err err-not-token-owner))
+    (map-set collaborators
+      {token-id: token-id, collaborator: collaborator}
+      (merge collaboration {active: false})
+    )
+    (ok true)
+  )
+)
+
+(define-public (approve-milestone-collaborative (token-id uint) (milestone-id uint))
+  (let
+    (
+      (plot (unwrap! (map-get? forest-plots token-id) (err err-token-not-found)))
+      (collaboration (unwrap! (map-get? collaborators {token-id: token-id, collaborator: tx-sender}) (err err-not-collaborator)))
+    )
+    (asserts! (get active collaboration) (err err-not-collaborator))
+    (map-set collaboration-approvals
+      {token-id: token-id, milestone-id: milestone-id, collaborator: tx-sender}
+      true
+    )
+    (ok true)
+  )
+)
+
+(define-public (distribute-rewards (token-id uint) (total-reward uint))
+  (let
+    (
+      (plot (unwrap! (map-get? forest-plots token-id) (err err-token-not-found)))
+    )
+    (asserts! (is-eq (get owner plot) tx-sender) (err err-not-token-owner))
+    (ok total-reward)
+  )
+)
+
+(define-public (transfer-collaboration-shares (token-id uint) (to principal) (shares uint))
+  (let
+    (
+      (collaboration (unwrap! (map-get? collaborators {token-id: token-id, collaborator: tx-sender}) (err err-not-collaborator)))
+      (current-shares (get shares collaboration))
+    )
+    (asserts! (get active collaboration) (err err-not-collaborator))
+    (asserts! (>= current-shares shares) (err err-insufficient-shares))
+    (asserts! (> shares u0) (err err-insufficient-shares))
+    (if (is-eq current-shares shares)
+      (begin
+        (map-set collaborators
+          {token-id: token-id, collaborator: to}
+          collaboration
+        )
+        (map-delete collaborators {token-id: token-id, collaborator: tx-sender})
+      )
+      (begin
+        (map-set collaborators
+          {token-id: token-id, collaborator: tx-sender}
+          (merge collaboration {shares: (- current-shares shares)})
+        )
+        (map-set collaborators
+          {token-id: token-id, collaborator: to}
+          {
+            shares: shares,
+            active: true,
+            joined-at: stacks-block-height
+          }
+        )
+      )
+    )
+    (ok true)
+  )
 )
