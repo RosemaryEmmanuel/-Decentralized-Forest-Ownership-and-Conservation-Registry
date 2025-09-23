@@ -10,6 +10,10 @@
 (define-constant err-not-collaborator (err u108))
 (define-constant err-insufficient-shares (err u109))
 (define-constant err-already-collaborator (err u110))
+(define-constant err-lease-not-found (err u111))
+(define-constant err-lease-active (err u112))
+(define-constant err-invalid-duration (err u113))
+(define-constant err-not-lessee (err u114))
 
 (define-data-var token-id-nonce uint u1)
 (define-data-var total-supply uint u0)
@@ -60,6 +64,17 @@
   }
 )
 
+(define-map plot-leases
+  uint
+  {
+    lessor: principal,
+    lessee: (optional principal),
+    duration-blocks: uint,
+    rental-fee: uint,
+    start-time: (optional uint)
+  }
+)
+
 (define-map collaboration-approvals
   {token-id: uint, milestone-id: uint, collaborator: principal}
   bool
@@ -105,6 +120,10 @@
 
 (define-read-only (get-listing (token-id uint))
   (map-get? marketplace-listings token-id)
+)
+
+(define-read-only (get-lease (token-id uint))
+  (map-get? plot-leases token-id)
 )
 
 (define-read-only (get-total-supply)
@@ -395,6 +414,72 @@
           }
         )
       )
+    )
+    (ok true)
+  )
+)
+
+(define-public (offer-lease (token-id uint) (duration-blocks uint) (rental-fee uint))
+  (let
+    (
+      (plot (unwrap! (map-get? forest-plots token-id) (err err-token-not-found)))
+    )
+    (asserts! (is-eq (get owner plot) tx-sender) (err err-not-token-owner))
+    (asserts! (> duration-blocks u0) (err err-invalid-duration))
+    (asserts! (is-none (map-get? plot-leases token-id)) (err err-lease-active))
+    (map-set plot-leases
+      token-id
+      {
+        lessor: tx-sender,
+        lessee: none,
+        duration-blocks: duration-blocks,
+        rental-fee: rental-fee,
+        start-time: none
+      }
+    )
+    (ok true)
+  )
+)
+
+(define-public (rent-plot (token-id uint))
+  (let
+    (
+      (lease (unwrap! (map-get? plot-leases token-id) (err err-lease-not-found)))
+      (plot (unwrap! (map-get? forest-plots token-id) (err err-token-not-found)))
+      (fee (get rental-fee lease))
+      (owner (get lessor lease))
+      (current-time stacks-block-height)
+    )
+    (asserts! (is-none (get lessee lease)) (err err-lease-active))
+    (asserts! (>= (stx-get-balance tx-sender) fee) (err err-insufficient-funds))
+    (unwrap! (stx-transfer? fee tx-sender owner) (err err-insufficient-funds))
+    (map-set plot-leases
+      token-id
+      (merge lease {
+        lessee: (some tx-sender),
+        start-time: (some current-time)
+      })
+    )
+    (ok true)
+  )
+)
+
+(define-public (end-lease (token-id uint))
+  (let
+    (
+      (lease (unwrap! (map-get? plot-leases token-id) (err err-lease-not-found)))
+      (lessee (unwrap! (get lessee lease) (err err-lease-not-found)))
+      (start-time (unwrap! (get start-time lease) (err err-lease-not-found)))
+      (duration (get duration-blocks lease))
+      (current-time stacks-block-height)
+    )
+    (asserts! (or (is-eq tx-sender (get lessor lease)) (>= current-time (+ start-time duration))) (err err-not-lessee))
+    (map-set plot-leases
+      token-id
+      (merge lease {
+        lessee: none,
+        start-time: none
+      })
     )
     (ok true)
   )

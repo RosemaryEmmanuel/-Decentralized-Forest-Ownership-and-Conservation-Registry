@@ -118,3 +118,54 @@ MIT License - Feel free to contribute to forest conservation! 🌲
 ---
 
 *Building a sustainable future, one tokenized forest at a time* 🌳✨
+
+## 🆕 New Feature: Forest Plot Leasing
+
+- 🏠 **Plot Leasing**: Owners can lease their forest plots for temporary access, enabling short-term conservation activities, research, or eco-tourism.
+- 💸 **Rental Revenue**: Earn STX fees from leasing, providing additional incentives for plot ownership and maintenance.
+- ⏳ **Time-Based Access**: Flexible duration-based rentals with automatic expiration and secure on-chain tracking.
+
+### Lease a Forest Plot
+```clarity
+(contract-call? .forest-registry offer-lease 
+  u1 
+  u1440 
+  u50000)
+```
+
+### Rent an Available Lease
+```clarity
+(contract-call? .forest-registry rent-plot u1)
+```
+
+### End Lease (Owner or Auto-Expire)
+```clarity
+(contract-call? .forest-registry end-lease u1)
+```
+
+## 📊 Updated Read-Only Functions
+
+- `get-lease` - Retrieve lease details for a plot
+
+## 🔧 Updated Contract Structure
+
+### Data Maps
+- **plot-leases**: Track leasing information including lessor, lessee, duration, fee, and start time
+
+### Error Codes
+- `u111`: Lease not found
+- `u112`: Lease already active
+- `u113`: Invalid duration
+- `u114`: Not authorized to end lease
+
+## 🌍 Enhanced Conservation Impact
+
+This leasing feature expands the platform's reach by:
+- **Temporary Access**: Facilitate research and monitoring without permanent transfers
+- **Revenue Generation**: Additional funding streams for conservation maintenance
+- **Flexible Utilization**: Support diverse use cases from scientific studies to educational visits
+- **Community Engagement**: Broader participation in forest stewardship activities
+
+---
+
+*Empowering global conservation through innovative blockchain leasing* 🌿🔗
