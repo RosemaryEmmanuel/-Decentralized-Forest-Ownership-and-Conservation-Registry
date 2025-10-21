@@ -168,4 +168,62 @@ This leasing feature expands the platform's reach by:
 
 ---
 
+## 🆕 New Feature: Forest Plot Auction System
+
+- 🛎️ **Auction System**: Owners can auction their forest plots to the highest bidder, enabling competitive pricing and market-driven valuations.
+- 💰 **Dynamic Bidding**: Real-time bidding with automatic highest-bid tracking and secure STX transfers upon auction completion.
+- ⏰ **Time-Bound Auctions**: Configurable auction durations with automatic expiration and settlement mechanisms.
+
+### Start an Auction
+```clarity
+(contract-call? .forest-registry start-auction
+  u1
+  u100000
+  u1440)
+```
+
+### Place a Bid
+```clarity
+(contract-call? .forest-registry place-bid u1 u150000)
+```
+
+### End Auction (Auto or Manual)
+```clarity
+(contract-call? .forest-registry end-auction u1)
+```
+
+### Cancel Auction (Owner Only)
+```clarity
+(contract-call? .forest-registry cancel-auction u1)
+```
+
+## 📊 Updated Read-Only Functions
+
+- `get-auction` - Retrieve auction details for a plot
+
+## 🔧 Updated Contract Structure
+
+### Data Maps
+- **plot-auctions**: Track auction information including seller, bids, end time, and status
+
+### Error Codes
+- `u115`: Auction not found
+- `u116`: Auction already active
+- `u117`: Auction has ended
+- `u118`: Bid too low
+- `u119`: Not highest bidder
+- `u120`: Invalid end time
+
+## 🌍 Enhanced Conservation Impact
+
+This auction system revolutionizes forest plot trading by:
+- **Market Efficiency**: Competitive bidding ensures fair market value for conservation assets
+- **Liquidity Enhancement**: Easier plot transfers through transparent auction mechanisms
+- **Investor Attraction**: Dynamic pricing attracts more conservation-focused investors
+- **Value Discovery**: Real-time market feedback on conservation asset worth
+- **Sustainable Trading**: Secure, on-chain auctions prevent fraudulent transactions
+
+---
+
+*Unleashing market dynamics for global forest conservation* 🌳💸
 *Empowering global conservation through innovative blockchain leasing* 🌿🔗

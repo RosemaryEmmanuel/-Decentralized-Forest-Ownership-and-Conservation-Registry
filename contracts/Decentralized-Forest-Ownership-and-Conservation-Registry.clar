@@ -14,6 +14,12 @@
 (define-constant err-lease-active (err u112))
 (define-constant err-invalid-duration (err u113))
 (define-constant err-not-lessee (err u114))
+(define-constant err-auction-not-found (err u115))
+(define-constant err-auction-active (err u116))
+(define-constant err-auction-ended (err u117))
+(define-constant err-bid-too-low (err u118))
+(define-constant err-not-highest-bidder (err u119))
+(define-constant err-invalid-end-time (err u120))
 
 (define-data-var token-id-nonce uint u1)
 (define-data-var total-supply uint u0)
@@ -80,6 +86,18 @@
   bool
 )
 
+(define-map plot-auctions
+  uint
+  {
+    seller: principal,
+    starting-price: uint,
+    current-bid: uint,
+    highest-bidder: (optional principal),
+    end-time: uint,
+    active: bool
+  }
+)
+
 (define-read-only (get-owner (token-id uint))
   (match (map-get? forest-plots token-id)
     plot (ok (get owner plot))
@@ -124,6 +142,10 @@
 
 (define-read-only (get-lease (token-id uint))
   (map-get? plot-leases token-id)
+)
+
+(define-read-only (get-auction (token-id uint))
+  (map-get? plot-auctions token-id)
 )
 
 (define-read-only (get-total-supply)
@@ -481,6 +503,102 @@
         start-time: none
       })
     )
+    (ok true)
+  )
+)
+
+(define-public (start-auction (token-id uint) (starting-price uint) (duration-blocks uint))
+  (let
+    (
+      (plot (unwrap! (map-get? forest-plots token-id) (err err-token-not-found)))
+    )
+    (asserts! (is-eq (get owner plot) tx-sender) (err err-not-token-owner))
+    (asserts! (> duration-blocks u0) (err err-invalid-end-time))
+    (asserts! (is-none (map-get? plot-auctions token-id)) (err err-auction-active))
+    (map-set plot-auctions
+      token-id
+      {
+        seller: tx-sender,
+        starting-price: starting-price,
+        current-bid: u0,
+        highest-bidder: none,
+        end-time: (+ stacks-block-height duration-blocks),
+        active: true
+      }
+    )
+    (ok true)
+  )
+)
+
+(define-public (place-bid (token-id uint) (bid-amount uint))
+  (let
+    (
+      (auction (unwrap! (map-get? plot-auctions token-id) (err err-auction-not-found)))
+      (current-bid (get current-bid auction))
+      (starting-price (get starting-price auction))
+      (end-time (get end-time auction))
+      (current-time stacks-block-height)
+    )
+    (asserts! (get active auction) (err err-auction-ended))
+    (asserts! (< current-time end-time) (err err-auction-ended))
+    (asserts! (>= bid-amount starting-price) (err err-bid-too-low))
+    (asserts! (> bid-amount current-bid) (err err-bid-too-low))
+    (asserts! (>= (stx-get-balance tx-sender) bid-amount) (err err-insufficient-funds))
+    (map-set plot-auctions
+      token-id
+      (merge auction {
+        current-bid: bid-amount,
+        highest-bidder: (some tx-sender)
+      })
+    )
+    (ok true)
+  )
+)
+
+(define-public (end-auction (token-id uint))
+  (let
+    (
+      (auction (unwrap! (map-get? plot-auctions token-id) (err err-auction-not-found)))
+      (plot (unwrap! (map-get? forest-plots token-id) (err err-token-not-found)))
+      (highest-bidder (get highest-bidder auction))
+      (current-bid (get current-bid auction))
+      (seller (get seller auction))
+      (end-time (get end-time auction))
+      (current-time stacks-block-height)
+    )
+    (asserts! (get active auction) (err err-auction-ended))
+    (asserts! (>= current-time end-time) (err err-auction-active))
+    (map-set plot-auctions
+      token-id
+      (merge auction {active: false})
+    )
+    (if (is-some highest-bidder)
+      (let
+        (
+          (bidder (unwrap-panic highest-bidder))
+        )
+        (unwrap! (stx-transfer? current-bid bidder seller) (err err-insufficient-funds))
+        (map-set forest-plots
+          token-id
+          (merge plot {owner: bidder})
+        )
+        (map-set token-balances seller (- (get-token-balance seller) u1))
+        (map-set token-balances bidder (+ (get-token-balance bidder) u1))
+        (ok current-bid)
+      )
+      (ok u0)
+    )
+  )
+)
+
+(define-public (cancel-auction (token-id uint))
+  (let
+    (
+      (auction (unwrap! (map-get? plot-auctions token-id) (err err-auction-not-found)))
+    )
+    (asserts! (is-eq (get seller auction) tx-sender) (err err-not-token-owner))
+    (asserts! (get active auction) (err err-auction-ended))
+    (map-delete plot-auctions token-id)
     (ok true)
   )
 )
