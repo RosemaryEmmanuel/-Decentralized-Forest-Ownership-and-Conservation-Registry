@@ -20,6 +20,9 @@
 (define-constant err-bid-too-low (err u118))
 (define-constant err-not-highest-bidder (err u119))
 (define-constant err-invalid-end-time (err u120))
+(define-constant err-no-stake-found (err u121))
+(define-constant err-insufficient-stake (err u122))
+(define-constant err-stake-locked (err u123))
 
 (define-data-var token-id-nonce uint u1)
 (define-data-var total-supply uint u0)
@@ -98,6 +101,15 @@
   }
 )
 
+(define-map token-stakes
+  {token-id: uint, staker: principal}
+  {
+    amount: uint,
+    staked-at: uint,
+    lock-period: uint
+  }
+)
+
 (define-read-only (get-owner (token-id uint))
   (match (map-get? forest-plots token-id)
     plot (ok (get owner plot))
@@ -146,6 +158,10 @@
 
 (define-read-only (get-auction (token-id uint))
   (map-get? plot-auctions token-id)
+)
+
+(define-read-only (get-stake (token-id uint) (staker principal))
+  (map-get? token-stakes {token-id: token-id, staker: staker})
 )
 
 (define-read-only (get-total-supply)
@@ -599,6 +615,62 @@
     (asserts! (is-eq (get seller auction) tx-sender) (err err-not-token-owner))
     (asserts! (get active auction) (err err-auction-ended))
     (map-delete plot-auctions token-id)
+    (ok true)
+  )
+)
+
+(define-public (stake-tokens (token-id uint) (amount uint) (lock-period uint))
+  (let
+    (
+      (balance (get-token-balance tx-sender))
+    )
+    (asserts! (>= balance amount) (err err-insufficient-funds))
+    (asserts! (> amount u0) (err err-insufficient-stake))
+    (asserts! (> lock-period u0) (err err-invalid-duration))
+    (asserts! (is-none (map-get? token-stakes {token-id: token-id, staker: tx-sender})) (err err-stake-locked))
+    (map-set token-stakes
+      {token-id: token-id, staker: tx-sender}
+      {
+        amount: amount,
+        staked-at: stacks-block-height,
+        lock-period: lock-period
+      }
+    )
+    (map-set token-balances tx-sender (- balance amount))
+    (ok true)
+  )
+)
+
+(define-public (unstake-tokens (token-id uint))
+  (let
+    (
+      (stake (unwrap! (map-get? token-stakes {token-id: token-id, staker: tx-sender}) (err err-no-stake-found)))
+      (staked-at (get staked-at stake))
+      (lock-period (get lock-period stake))
+      (amount (get amount stake))
+      (current-time stacks-block-height)
+    )
+    (asserts! (>= current-time (+ staked-at lock-period)) (err err-stake-locked))
+    (map-delete token-stakes {token-id: token-id, staker: tx-sender})
+    (map-set token-balances tx-sender (+ (get-token-balance tx-sender) amount))
+    (ok amount)
+  )
+)
+
+(define-public (increase-stake (token-id uint) (additional-amount uint))
+  (let
+    (
+      (stake (unwrap! (map-get? token-stakes {token-id: token-id, staker: tx-sender}) (err err-no-stake-found)))
+      (current-amount (get amount stake))
+      (balance (get-token-balance tx-sender))
+    )
+    (asserts! (>= balance additional-amount) (err err-insufficient-funds))
+    (asserts! (> additional-amount u0) (err err-insufficient-stake))
+    (map-set token-stakes
+      {token-id: token-id, staker: tx-sender}
+      (merge stake {amount: (+ current-amount additional-amount)})
+    )
+    (map-set token-balances tx-sender (- balance additional-amount))
     (ok true)
   )
 )

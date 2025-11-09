@@ -227,3 +227,55 @@ This auction system revolutionizes forest plot trading by:
 
 *Unleashing market dynamics for global forest conservation* 🌳💸
 *Empowering global conservation through innovative blockchain leasing* 🌿🔗
+
+## 🆕 New Feature: Token Staking Mechanism
+
+- 🔒 **Secure Staking**: Users can lock reward tokens on specific forest plots to demonstrate long-term commitment to conservation efforts.
+- ⏳ **Flexible Lock Periods**: Configurable staking durations with time-based rewards and automatic unlocking mechanisms.
+- 📈 **Stake Enhancement**: Ability to increase existing stakes without resetting lock periods, maximizing conservation incentives.
+- 🏆 **Commitment Rewards**: Staked tokens earn additional rewards and voting power in conservation decisions.
+
+### Stake Tokens on a Forest Plot
+```clarity
+(contract-call? .forest-registry stake-tokens
+  u1
+  u100
+  u1440)
+```
+
+### Unstake Tokens (After Lock Period)
+```clarity
+(contract-call? .forest-registry unstake-tokens u1)
+```
+
+### Increase Existing Stake
+```clarity
+(contract-call? .forest-registry increase-stake u1 u50)
+```
+
+## 📊 Updated Read-Only Functions
+
+- `get-stake` - Retrieve staking details for a specific token and staker
+
+## 🔧 Updated Contract Structure
+
+### Data Maps
+- **token-stakes**: Track staking information including amount, stake time, and lock period
+
+### Error Codes
+- `u121`: Stake not found
+- `u122`: Insufficient stake amount
+- `u123`: Stake still locked
+
+## 🌍 Enhanced Conservation Impact
+
+This staking mechanism transforms the platform into a powerful conservation commitment tool by:
+- **Long-Term Commitment**: Encouraging sustained investment in forest preservation through locked stakes
+- **Incentive Alignment**: Stakers gain voting rights and rewards proportional to their conservation commitment
+- **Risk Mitigation**: Time-locked stakes prevent short-term speculation and promote genuine conservation focus
+- **Community Governance**: Staked tokens enable participation in milestone approvals and conservation decisions
+- **Sustainable Funding**: Creates stable funding streams for ongoing forest management and monitoring
+
+---
+
+*Forging unbreakable bonds between stakeholders and sustainable forest futures* 🌲🔐
