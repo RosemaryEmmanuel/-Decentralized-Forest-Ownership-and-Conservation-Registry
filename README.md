@@ -276,6 +276,50 @@ This staking mechanism transforms the platform into a powerful conservation comm
 - **Community Governance**: Staked tokens enable participation in milestone approvals and conservation decisions
 - **Sustainable Funding**: Creates stable funding streams for ongoing forest management and monitoring
 
+## 🆕 New Feature: Conservation Donation Pool
+
+- 💰 **Donation Pool**: Users can donate STX to a global conservation fund, supporting verified milestones and plots.
+
+- 🎁 **Fund Distribution**: Contract owner distributes donations to reward tokens for specific forest plots.
+
+- 📈 **Transparent Tracking**: On-chain visibility of total donations and allocations.
+
+### Donate to the Pool
+
+```clarity
+
+(contract-call? .forest-registry donate-to-pool u100000)
+
+```
+
+### Distribute Donations (Owner Only)
+
+```clarity
+
+(contract-call? .forest-registry distribute-donation u1 u50000)
+
+```
+
+## 📊 Updated Read-Only Functions
+
+- `get-total-donations` - Retrieve the total STX donated to the conservation pool
+
+## 🌍 Enhanced Conservation Impact
+
+This donation pool amplifies the platform's conservation efforts by:
+
+- **Community Engagement**: Encourages widespread participation in funding environmental initiatives
+
+- **Flexible Funding**: Provides additional resources for milestone rewards and plot maintenance
+
+- **Transparent Allocation**: Ensures donated funds are directed towards verified conservation activities
+
+- **Scalable Support**: Enables global contributions to localized forest preservation projects
+
+---
+
+*Empowering collective action for planetary healing* 🌍💚
+
 ---
 
 *Forging unbreakable bonds between stakeholders and sustainable forest futures* 🌲🔐

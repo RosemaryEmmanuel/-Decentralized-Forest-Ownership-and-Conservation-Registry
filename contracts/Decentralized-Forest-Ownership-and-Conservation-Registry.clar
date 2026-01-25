@@ -26,6 +26,7 @@
 
 (define-data-var token-id-nonce uint u1)
 (define-data-var total-supply uint u0)
+(define-data-var total-donations uint u0)
 
 (define-map forest-plots
   uint
@@ -672,5 +673,31 @@
     )
     (map-set token-balances tx-sender (- balance additional-amount))
     (ok true)
+  )
+)
+
+(define-public (donate-to-pool (amount uint))
+  (begin
+    (asserts! (> amount u0) (err err-insufficient-funds))
+    (asserts! (>= (stx-get-balance tx-sender) amount) (err err-insufficient-funds))
+    (unwrap! (stx-transfer? amount tx-sender (as-contract tx-sender)) (err err-insufficient-funds))
+    (var-set total-donations (+ (var-get total-donations) amount))
+    (ok true)
+  )
+)
+
+(define-public (distribute-donation (token-id uint) (amount uint))
+  (let
+    (
+      (plot (unwrap! (map-get? forest-plots token-id) (err err-token-not-found)))
+    )
+    (asserts! (is-eq tx-sender contract-owner) (err err-owner-only))
+    (asserts! (>= (var-get total-donations) amount) (err err-insufficient-funds))
+    (var-set total-donations (- (var-get total-donations) amount))
+    (map-set forest-plots
+      token-id
+      (merge plot {reward-tokens: (+ (get reward-tokens plot) amount)})
+    )
+    (ok amount)
   )
 )
